@@ -1,12 +1,12 @@
 import discord
 from discord.ext import commands
-import requests
 import random
 import string
 import asyncio
 import os
 from flask import Flask
 import threading
+import aiohttp
 
 print(“🚀 Démarrage du bot…”)
 
@@ -39,10 +39,16 @@ bot = commands.Bot(command_prefix=”!”, intents=intents)
 is_searching = False
 CHECKER_API = “https://api.pomelo.lixqa.cc/v1/lookups”
 
+# ⚖️ Mode équilibré (~200 tests/min)
+
+CONCURRENT_TASKS = 5
+DELAY_BETWEEN_BATCHES = 1.5
+RATE_LIMIT_PAUSE = 10  # Secondes de pause si rate limit détecté
+
 def generate_4char_letters():
 return ‘’.join(random.choices(string.ascii_lowercase, k=4))
 
-async def send_webhook(username: str):
+async def send_webhook(session: aiohttp.ClientSession, username: str):
 if not WEBHOOK_URL:
 return
 embed = {
@@ -51,24 +57,34 @@ embed = {
 “color”: 0x00ff00
 }
 try:
-requests.post(WEBHOOK_URL, json={“embeds”: [embed]})
+await session.post(WEBHOOK_URL, json={“embeds”: [embed]})
 except:
 pass
 
-async def check_username_api(username: str):
+async def check_username_api(session: aiohttp.ClientSession, username: str):
+“””
+Retourne (disponible: bool, rate_limited: bool)
+“””
 try:
-r = requests.post(CHECKER_API, json={“username”: username}, timeout=10)
-if r.status_code == 200:
-data = r.json()
-return data.get(“available”) is True or data.get(“status”) == “available”
-return False
+async with session.post(
+CHECKER_API,
+json={“username”: username},
+timeout=aiohttp.ClientTimeout(total=10)
+) as r:
+if r.status == 429:
+return False, True  # Rate limit détecté
+if r.status == 200:
+data = await r.json()
+available = data.get(“available”) is True or data.get(“status”) == “available”
+return available, False
+return False, False
 except:
-return False
+return False, False
 
 @bot.event
 async def on_ready():
 print(f”✅ Bot connecté : {bot.user}”)
-print(“Commandes : !find4inf (infini) | !stop”)
+print(“Commandes : !find4inf | !stop”)
 
 @bot.command()
 async def find4inf(ctx):
@@ -79,42 +95,64 @@ return
 
 ```
 is_searching = True
-await ctx.send("🔄 **Recherche infinie lancée** (4 lettres a-z)\nLe bot va continuer jusqu'à ce que tu fasses `!stop`.\nLes disponibilités seront envoyées immédiatement.")
+await ctx.send(
+    f"🔄 **Recherche infinie lancée** (4 lettres a-z)\n"
+    f"⚖️ Mode équilibré : **{CONCURRENT_TASKS} tests en parallèle** — pause de {DELAY_BETWEEN_BATCHES}s entre chaque batch\n"
+    f"Tape `!stop` pour arrêter."
+)
 
 found = 0
-tested = 0  # Compteur de tentatives
+tested = 0
+last_report = 0
 
-try:
-    while is_searching:
-        username = generate_4char_letters()
-        tested += 1
+async with aiohttp.ClientSession() as session:
+    try:
+        while is_searching:
+            usernames = [generate_4char_letters() for _ in range(CONCURRENT_TASKS)]
 
-        if await check_username_api(username):
-            found += 1
-            await ctx.send(f"🎉 **DISPONIBLE !** `@{username}`")
-            await send_webhook(username)
-            await asyncio.sleep(1)
-
-        # Envoie un résumé toutes les 100 tentatives
-        if tested % 100 == 0:
-            await ctx.send(
-                f"📊 **Rapport — {tested} tentatives**\n"
-                f"✅ Disponibles trouvés : **{found}**\n"
-                f"❌ Indisponibles : **{tested - found}**"
+            results = await asyncio.gather(
+                *[check_username_api(session, u) for u in usernames]
             )
 
-        await asyncio.sleep(1.3)  # Important : ne pas trop spammer
+            # Vérifie si un rate limit a été détecté dans le batch
+            rate_limited = any(rl for _, rl in results)
 
-except asyncio.CancelledError:
-    pass
-finally:
-    is_searching = False
-    await ctx.send(
-        f"⛔ Recherche arrêtée.\n"
-        f"📊 **Résultat final :**\n"
-        f"🔍 Tentatives : **{tested}**\n"
-        f"🎉 Disponibles : **{found}**"
-    )
+            if rate_limited:
+                await ctx.send(
+                    f"⚠️ **Rate limit détecté !** Pause de {RATE_LIMIT_PAUSE} secondes..."
+                )
+                await asyncio.sleep(RATE_LIMIT_PAUSE)
+                continue  # On recommence ce batch sans compter les tentatives
+
+            tested += CONCURRENT_TASKS
+
+            for username, (available, _) in zip(usernames, results):
+                if available:
+                    found += 1
+                    await ctx.send(f"🎉 **DISPONIBLE !** `@{username}`")
+                    await send_webhook(session, username)
+
+            # Rapport toutes les 100 tentatives
+            if tested // 100 > last_report // 100:
+                last_report = tested
+                await ctx.send(
+                    f"📊 **Rapport — {tested} tentatives**\n"
+                    f"✅ Disponibles trouvés : **{found}**\n"
+                    f"❌ Indisponibles : **{tested - found}**"
+                )
+
+            await asyncio.sleep(DELAY_BETWEEN_BATCHES)
+
+    except asyncio.CancelledError:
+        pass
+    finally:
+        is_searching = False
+        await ctx.send(
+            f"⛔ Recherche arrêtée.\n"
+            f"📊 **Résultat final :**\n"
+            f"🔍 Tentatives : **{tested}**\n"
+            f"🎉 Disponibles : **{found}**"
+        )
 ```
 
 @bot.command()
@@ -130,5 +168,5 @@ await ctx.send(“Aucune recherche en cours.”)
 
 if **name** == “**main**”:
 threading.Thread(target=run_flask, daemon=True).start()
-print(“🚀 Bot lancé - Mode Infini disponible”)
+print(“🚀 Bot lancé - Mode équilibré disponible”)
 bot.run(TOKEN)
