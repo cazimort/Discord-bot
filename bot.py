@@ -6,16 +6,16 @@ import string
 import asyncio
 import os
 
-print("🚀 Démarrage du bot...")
+print("🚀 Démarrage du script...")
 
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-if not TOKEN:
-    print("❌ ERREUR CRITIQUE : DISCORD_BOT_TOKEN manquant !")
-    exit(1)
+print(f"Token trouvé : {'Oui' if TOKEN else 'NON'}")
 
-print("✅ Token trouvé")
+if not TOKEN:
+    print("❌ ERREUR CRITIQUE : DISCORD_BOT_TOKEN manquant dans les variables Render !")
+    exit(1)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -57,7 +57,7 @@ async def on_ready():
 
 @bot.command()
 async def find4(ctx, nombre: int = 20):
-    await ctx.send(f"🔍 Recherche de {nombre} pseudos 4 caractères en cours...")
+    await ctx.send(f"🔍 Recherche de {nombre} pseudos 4 caractères...")
     found_count = 0
     for _ in range(nombre):
         username = generate_4char()
@@ -66,7 +66,6 @@ async def find4(ctx, nombre: int = 20):
             await ctx.send(f"🎉 **DISPONIBLE !** `@{username}`")
             await send_webhook(username)
         await asyncio.sleep(1.3)
-    
     await ctx.send(f"✅ Recherche terminée. {found_count} pseudo(s) trouvé(s).")
 
 print("Lancement de bot.run()...")
