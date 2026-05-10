@@ -69,4 +69,15 @@ async def find4(ctx, nombre: int = 20):
     await ctx.send(f"✅ Recherche terminée. {found_count} pseudo(s) trouvé(s).")
 
 print("Lancement de bot.run()...")
+# === KEEP ALIVE POUR RENDER (gratuit) ===
+import threading
+import time
+
+def keep_alive():
+    while True:
+        print("🔄 Keep alive ping...")
+        time.sleep(300)  # toutes les 5 minutes
+
+# Démarre le keep alive en arrière-plan
+threading.Thread(target=keep_alive, daemon=True).start()
 bot.run(TOKEN)
