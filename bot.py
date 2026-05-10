@@ -5,18 +5,29 @@ import random
 import string
 import asyncio
 import os
+from flask import Flask
+import threading
 
-print("🚀 Démarrage du script...")
-
+# ====================== CONFIG ======================
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 
-print(f"Token trouvé : {'Oui' if TOKEN else 'NON'}")
-
 if not TOKEN:
-    print("❌ ERREUR CRITIQUE : DISCORD_BOT_TOKEN manquant dans les variables Render !")
+    print("❌ DISCORD_BOT_TOKEN manquant !")
     exit(1)
 
+# ====================== FLASK KEEP ALIVE ======================
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot Discord 4 caractères en ligne ! ✅"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host='0.0.0.0', port=port)
+
+# ====================== BOT DISCORD ======================
 intents = discord.Intents.default()
 intents.message_content = True
 
@@ -53,31 +64,24 @@ async def check_username_api(username: str):
 
 @bot.event
 async def on_ready():
-    print(f"✅ Bot connecté avec succès : {bot.user}")
+    print(f"✅ Bot connecté : {bot.user}")
 
 @bot.command()
 async def find4(ctx, nombre: int = 20):
-    await ctx.send(f"🔍 Recherche de {nombre} pseudos 4 caractères...")
-    found_count = 0
+    await ctx.send(f"🔍 Recherche de {nombre} pseudos 4 caractères en cours...")
+    found = 0
     for _ in range(nombre):
         username = generate_4char()
         if await check_username_api(username):
-            found_count += 1
+            found += 1
             await ctx.send(f"🎉 **DISPONIBLE !** `@{username}`")
             await send_webhook(username)
         await asyncio.sleep(1.3)
-    await ctx.send(f"✅ Recherche terminée. {found_count} pseudo(s) trouvé(s).")
+    await ctx.send(f"✅ Recherche terminée — {found} trouvé(s).")
 
-print("Lancement de bot.run()...")
-# === KEEP ALIVE POUR RENDER (gratuit) ===
-import threading
-import time
-
-def keep_alive():
-    while True:
-        print("🔄 Keep alive ping...")
-        time.sleep(300)  # toutes les 5 minutes
-
-# Démarre le keep alive en arrière-plan
-threading.Thread(target=keep_alive, daemon=True).start()
-bot.run(TOKEN)
+# ====================== LANCEMENT ======================
+if __name__ == "__main__":
+    # Lance Flask en arrière-plan
+    threading.Thread(target=run_flask, daemon=True).start()
+    print("🚀 Bot démarré + serveur web pour Render")
+    bot.run(TOKEN)
