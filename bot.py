@@ -84,7 +84,7 @@ async def find4inf(ctx):
         return
 
     is_searching = True
-    await ctx.send("Recherche lancee ! 1 test toutes les 1.3s. Tape !stop pour arreter.")
+    await ctx.send("Recherche lancee ! 1 test toutes les 5s. Tape !stop pour arreter.")
 
     found = 0
     tested = 0
@@ -105,7 +105,7 @@ async def find4inf(ctx):
 
                 if available:
                     found += 1
-                    await ctx.send("DISPONIBLE ! @" + username)
+                    await ctx.send("DISPONIBLE !@everyone @" + username)
                     await send_webhook(session, username)
 
                 if tested // 100 > last_report // 100:
