@@ -36,7 +36,7 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 is_searching = False
 CHECKER_API = "https://api.pomelo.lixqa.cc/v1/lookups"
 
-DELAY_BETWEEN_REQUESTS = 1.3
+DELAY_BETWEEN_REQUESTS = 5
 RATE_LIMIT_PAUSE = 30
 
 def generate_4char_letters():
