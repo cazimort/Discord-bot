@@ -36,9 +36,8 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 is_searching = False
 CHECKER_API = "https://api.pomelo.lixqa.cc/v1/lookups"
 
-CONCURRENT_TASKS = 5
-DELAY_BETWEEN_BATCHES = 1.5
-RATE_LIMIT_PAUSE = 10
+DELAY_BETWEEN_REQUESTS = 1.3
+RATE_LIMIT_PAUSE = 30
 
 def generate_4char_letters():
     return "".join(random.choices(string.ascii_lowercase, k=4))
@@ -85,7 +84,7 @@ async def find4inf(ctx):
         return
 
     is_searching = True
-    await ctx.send("Recherche lancee ! Tape !stop pour arreter.")
+    await ctx.send("Recherche lancee ! 1 test toutes les 1.3s. Tape !stop pour arreter.")
 
     found = 0
     tested = 0
@@ -94,26 +93,20 @@ async def find4inf(ctx):
     async with aiohttp.ClientSession() as session:
         try:
             while is_searching:
-                usernames = [generate_4char_letters() for _ in range(CONCURRENT_TASKS)]
-
-                results = await asyncio.gather(
-                    *[check_username_api(session, u) for u in usernames]
-                )
-
-                rate_limited = any(rl for _, rl in results)
+                username = generate_4char_letters()
+                available, rate_limited = await check_username_api(session, username)
 
                 if rate_limited:
-                    await ctx.send("Rate limit detecte ! Pause de " + str(RATE_LIMIT_PAUSE) + " secondes...")
+                    await ctx.send("Rate limit ! Pause de " + str(RATE_LIMIT_PAUSE) + " secondes...")
                     await asyncio.sleep(RATE_LIMIT_PAUSE)
                     continue
 
-                tested += CONCURRENT_TASKS
+                tested += 1
 
-                for username, (available, _) in zip(usernames, results):
-                    if available:
-                        found += 1
-                        await ctx.send("DISPONIBLE ! @" + username)
-                        await send_webhook(session, username)
+                if available:
+                    found += 1
+                    await ctx.send("DISPONIBLE ! @" + username)
+                    await send_webhook(session, username)
 
                 if tested // 100 > last_report // 100:
                     last_report = tested
@@ -123,7 +116,7 @@ async def find4inf(ctx):
                         + "Indisponibles : " + str(tested - found)
                     )
 
-                await asyncio.sleep(DELAY_BETWEEN_BATCHES)
+                await asyncio.sleep(DELAY_BETWEEN_REQUESTS)
 
         except asyncio.CancelledError:
             pass
