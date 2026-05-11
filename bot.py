@@ -36,8 +36,8 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 is_searching = False
 CHECKER_API = "https://api.pomelo.lixqa.cc/v1/lookups"
 
-DELAY_BETWEEN_REQUESTS = 5
-RATE_LIMIT_PAUSE = 30
+DELAY_BETWEEN_REQUESTS = 5.0
+RATE_LIMIT_PAUSE = 60
 
 def generate_4char_letters():
     return "".join(random.choices(string.ascii_lowercase, k=4))
@@ -105,7 +105,7 @@ async def find4inf(ctx):
 
                 if available:
                     found += 1
-                    await ctx.send("DISPONIBLE !@everyone @" + username)
+                    await ctx.send("DISPONIBLE ! @" + username)
                     await send_webhook(session, username)
 
                 if tested // 100 > last_report // 100:
@@ -120,6 +120,9 @@ async def find4inf(ctx):
 
         except asyncio.CancelledError:
             pass
+        except Exception as e:
+            await ctx.send("Erreur inattendue : " + str(e) + " - Redemarrage dans 5s...")
+            await asyncio.sleep(5)
         finally:
             is_searching = False
             await ctx.send(
